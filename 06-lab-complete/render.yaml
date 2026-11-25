@@ -1,16 +1,20 @@
 # ============================================================
 # Render Blueprint — thay thế railway.toml nếu deploy bằng Render.
-# Push repo lên GitHub → Render Dashboard → New → Blueprint → chọn repo.
-# Secret (AGENT_API_KEY) dùng generateValue/sync:false, điền giá trị thật
-# trong Render Dashboard, KHÔNG ghi thẳng ở đây.
+# Push repo lên GitHub → Render Dashboard → New → Blueprint → chọn repo,
+# ô "Blueprint Path" điền: 06-lab-complete/render.yaml
+# Secret (AGENT_API_KEY) dùng generateValue, Render tự sinh giá trị —
+# KHÔNG ghi thẳng ở đây. REDIS_URL lấy từ Key Value (Redis) khai báo bên dưới.
 # ============================================================
 services:
   - type: web
     name: day14-agent
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    # Đường dẫn tính từ gốc repo (render.yaml nằm trong thư mục con)
+    dockerContext: ./06-lab-complete
+    dockerfilePath: ./06-lab-complete/Dockerfile
     healthCheckPath: /health
     plan: free
+    region: singapore
     envVars:
       - key: ENVIRONMENT
         value: production
@@ -21,4 +25,15 @@ services:
       - key: DAILY_BUDGET_USD
         value: "10"
       - key: REDIS_URL
-        sync: false
+        fromService:
+          type: keyvalue
+          name: day14-redis
+          property: connectionString
+
+  # Redis-compatible store cho rate limit + cost guard (state dùng chung)
+  - type: keyvalue
+    name: day14-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: []   # chỉ cho service trong cùng tài khoản Render kết nối

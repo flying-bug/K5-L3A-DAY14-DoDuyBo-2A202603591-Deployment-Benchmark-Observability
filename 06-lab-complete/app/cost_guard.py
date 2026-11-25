@@ -5,6 +5,8 @@ Yêu cầu:
   • Cộng dồn chi phí LLM (tính theo token) vào Redis
   • Tổng chi phí vượt DAILY_BUDGET_USD (hoặc MONTHLY_BUDGET_USD) → HTTP 402
 """
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
 
 from app.config import settings
@@ -14,18 +16,27 @@ from app.redis_client import r
 PRICE_INPUT_PER_1K = 0.00015
 PRICE_OUTPUT_PER_1K = 0.0006
 
-COST_KEY = "cost:total_usd"
+# Mỗi ngày (UTC) một key riêng → budget tự reset lúc 00:00 UTC, key cũ tự hết hạn.
+KEY_TTL_SECONDS = 2 * 24 * 3600
+
+
+def _cost_key() -> str:
+    return f"cost:{datetime.now(timezone.utc):%Y-%m-%d}"
 
 
 def check_budget() -> None:
     """Gọi TRƯỚC khi gọi LLM. Hết budget → raise HTTPException(status_code=402)."""
-    spent = float(r.get(COST_KEY) or 0.0)
+    spent = float(r.get(_cost_key()) or 0.0)
     if spent >= settings.daily_budget_usd:
-        raise HTTPException(status_code=402, detail="Monthly/daily budget exceeded")
+        raise HTTPException(status_code=402, detail="Daily budget exceeded")
 
 
 def record_cost(input_tokens: int, output_tokens: int) -> float:
     """Gọi SAU khi gọi LLM. Cộng chi phí của request vào tổng, trả về chi phí request."""
     cost = (input_tokens / 1000) * PRICE_INPUT_PER_1K + (output_tokens / 1000) * PRICE_OUTPUT_PER_1K
-    r.incrbyfloat(COST_KEY, cost)
+    key = _cost_key()
+    pipe = r.pipeline()
+    pipe.incrbyfloat(key, cost)
+    pipe.expire(key, KEY_TTL_SECONDS)
+    pipe.execute()
     return cost
