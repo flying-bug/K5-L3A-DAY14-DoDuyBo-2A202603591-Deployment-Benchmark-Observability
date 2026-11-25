@@ -6,8 +6,8 @@
 
 Bằng chứng:
 
-- Load test và eval: [`06-lab-complete/benchmark-observability/develop/reports/`](06-lab-complete/benchmark-observability/develop/reports/)
-- Locust CSV: [`06-lab-complete/benchmark-observability/production/benchmark-results/`](06-lab-complete/benchmark-observability/production/benchmark-results/)
+- Load test và eval: [`reports/`](reports/) (bản gốc ghi ra ở `06-lab-complete/benchmark-observability/develop/reports/`)
+- Locust CSV: [`benchmark-results/`](benchmark-results/) (bản gốc ở `06-lab-complete/benchmark-observability/production/benchmark-results/`)
 - Ảnh: [`screenshots/`](screenshots/)
 
 ---
