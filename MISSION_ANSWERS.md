@@ -221,7 +221,7 @@ Dọn: `docker compose -p k5-day14-docker down -v`.
 
 ### Exercise 3.2: Render deployment
 
-- URL: _(điền sau khi deploy, xem `DEPLOYMENT.md`)_
+- URL: https://day14-agent-7egh.onrender.com (chi tiết và kết quả test trong `DEPLOYMENT.md`)
 - Cách deploy: Render Dashboard → New → Blueprint → chọn repo, Blueprint Path `06-lab-complete/render.yaml`. Blueprint tạo hai service: web `day14-agent` (Docker) và Key Value `day14-redis` (Redis); `REDIS_URL` của agent lấy từ `connectionString` của Key Value; `AGENT_API_KEY` do Render tự sinh (`generateValue: true`).
 
 ### So sánh `railway.toml` và `render.yaml`
@@ -493,6 +493,18 @@ Chạy trong WSL Ubuntu (`os.name == "posix"`), Docker Desktop bật WSL integra
 
 ---
 
+## Part 7: Benchmark & Observability
+
+Báo cáo đầy đủ trong [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md), kèm `develop/reports/*.json`, `production/benchmark-results/scale_{1,3}_stats.csv` và 4 ảnh trong `screenshots/`. Tóm tắt:
+
+- **7.1:** thêm Histogram `agent_question_length_chars` vào `develop/app.py` (không dùng label độ dài vì cardinality). Label `route` dùng template `route.path`, nên bot quét `/wp-admin`, `/.env`, ... đều gom vào `unmatched`. Dùng URL thật thì mỗi URL lạ thành một time series mới, Prometheus phình RAM.
+- **7.2:** v2 đạt SLO p95 < 500 ms ở c=1 và c=10. Ở c=50 p95 = 545.9 ms, ở c=100 p95 = 4005.7 ms (quá tải, RPS còn giảm). `MOCK_SLOW_RATE` 0 → 0.03: avg +19 %, p99 ×3.3.
+- **7.3:** v1 4.35 %, v2 91.3 %, v2 sau khi thêm KB HPA và JWT đạt **100 % (23/23), 0 regression**. CI: [`.github/workflows/eval.yml`](.github/workflows/eval.yml); `run_eval.py` exit 1 thì chặn merge.
+- **7.4–7.6:** stack Prometheus/Grafana/Jaeger. Phải sửa `production/Dockerfile` (`PYTHONUSERBASE`) vì agent crash `No module named 'uvicorn'`. Alert firing: `AgentHighErrorRate` 86 s, `AgentHighLatencyP95` 153 s, `LLMCostBurnRateHigh` 148 s, `AgentInstanceDown` 42 s. Trace chậm `2b24cc29…`: span LLM chiếm 94.6 %.
+- **Scale 1 → 3:** RPS không đổi (Locust closed-loop), p95 300 → 230 ms, p99 giữ 1700 ms vì nút thắt là LLM.
+
+---
+
 ## AI log
 
 | Lúc | Hỏi AI gì | Nhận được gì | Mình tự kiểm tra thế nào |
@@ -503,3 +515,4 @@ Chạy trong WSL Ubuntu (`os.name == "posix"`), Docker Desktop bật WSL integra
 | Part 4 | Nhờ Claude Code chạy bản develop/production, vòng lặp rate limit, giải thích JWT và cost guard | Output 401/403/200/429 thật, phát hiện field `budget_remaining_usd` trả sai giá trị, đề xuất cost key theo ngày có TTL | Tự chạy lại vòng lặp curl, thấy 429 ở request thứ 10; đọc `auth.py`, `rate_limiter.py` |
 | Part 5 | Nhờ Claude Code test health/ready, graceful shutdown trong container, stack 3 instance và `test_stateless.py` | Output thật, giải thích thứ tự log signal của uvicorn, phân phối round-robin | Chạy lại `docker compose ... --scale agent=3` và `test_stateless.py`, xem `served_by` |
 | Part 6 | Nhờ Claude Code hoàn thiện TODO, chạy `check_production_ready.py` trong WSL | `PASS 12/12` | Tự chạy lại script trong WSL Ubuntu |
+| Part 7 | Nhờ Claude Code chạy load test/eval, sửa KB, dựng stack observability, chạy Locust scale 1/3, làm thí nghiệm alert, chụp Grafana/Jaeger/Prometheus và soạn `BENCHMARK_REPORT.md` | JSON/CSV report, 4 ảnh, thời gian firing của 4 alert; phát hiện lỗi Dockerfile và việc `docker compose run` tự đổi số replica | Đối chiếu từng số trong report với file JSON/CSV; xem lại ảnh; tự chạy `run_eval.py --min-accuracy 1.0` thấy PASS |
